@@ -4,6 +4,7 @@ using System.Net;
 using System.Web.Script.Serialization;
 using System.Xml.Serialization;
 using bol.com.PlazaAPI.Helpers;
+using System.Collections.Generic;
 
 namespace bol.com.PlazaAPI
 {
@@ -349,6 +350,176 @@ namespace bol.com.PlazaAPI
             }
 
             return results;
+        }
+
+        public bool CreateOffer(OfferCreate offerCreate, string offerId)
+        {
+            HttpWebResponse response = null;
+            bool succeeded = false;
+
+            try
+            {
+                string requestUriString = string.Concat(_url, "/offers/v1/", offerId);
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(requestUriString);
+
+                Utils.HandleRequest(request, C.RequestMethods.POST, _publicKey, _privateKey);
+
+                StreamWriter writer = new StreamWriter(string.Format("E:\\plaza_api_fork\\offerCreate_{0}.xml", offerId));
+
+                XmlSerializer test = new XmlSerializer(typeof(OfferCreate));
+                test.Serialize(writer, offerCreate);
+                writer.Close();
+
+                using (Stream reqStream = request.GetRequestStream())
+                {
+                    XmlSerializer s = new XmlSerializer(typeof(OfferCreate));
+                    s.Serialize(reqStream, offerCreate);
+                }
+
+                SigningRequest = Utils.StringToSign.Replace("\n", Environment.NewLine);
+                response = (HttpWebResponse)request.GetResponse();
+
+                succeeded = response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Accepted;// ???
+            }
+            catch (WebException ex)
+            {
+                if (ex.Response != null)
+                {
+                    throw ExceptionHandler.HandleResponseException((HttpWebResponse)ex.Response);
+                }
+                else
+                {
+                    throw;
+                }
+            }
+            finally
+            {
+                if (response != null)
+                {
+                    response.Close();
+                }
+            }
+
+            return succeeded;
+        }
+
+        public string GetOffersDownloadURL(bool? published = null)
+        {
+            HttpWebResponse response = null;
+            OfferFile offerfile = null;
+
+            try
+            {
+                string filter = "";
+
+                if (published.HasValue)
+                {
+                    if (published.Value)
+                    {
+                        filter += "?filter=PUBLISHED";
+                    }
+                    else
+                    {
+                        filter += "?filter=NOT-PUBLISHED";
+                    }
+                }
+
+                string requestUriString = string.Concat(_url, "/offers/v1/export", filter);
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(requestUriString);
+
+                Utils.HandleRequest(request, C.RequestMethods.GET, _publicKey, _privateKey);
+
+                SigningRequest = Utils.StringToSign.Replace("\n", Environment.NewLine);
+                response = (HttpWebResponse)request.GetResponse();
+
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    XmlSerializer ser = new XmlSerializer(typeof(OfferFile));
+                    object obj = ser.Deserialize(response.GetResponseStream());
+                    offerfile = (OfferFile)obj;
+
+                    var json = new JavaScriptSerializer().Serialize(obj);
+                    ResponseOutput = json;
+                }
+            }
+            catch (WebException ex)
+            {
+                if (ex.Response != null)
+                {
+                    throw ExceptionHandler.HandleResponseException((HttpWebResponse)ex.Response);
+                }
+                else
+                {
+                    throw;
+                }
+            }
+            finally
+            {
+                if (response != null)
+                {
+                    response.Close();
+                }
+            }
+
+            return offerfile.Url;
+        }
+
+        public bool DownloadOffers(string offersUrl, string filePath)
+        {
+            HttpWebResponse response = null;
+            StreamReader reader = null;
+            bool fileSaved = false;
+
+            try
+            {
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(offersUrl);
+
+                Utils.HandleRequest(request, C.RequestMethods.GET, _publicKey, _privateKey);
+
+                SigningRequest = Utils.StringToSign.Replace("\n", Environment.NewLine);
+                response = (HttpWebResponse)request.GetResponse();
+
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Stream responseStream = response.GetResponseStream();
+                    reader = new StreamReader(responseStream);
+
+                    var strReponse = reader.ReadToEnd();
+                    File.WriteAllText(filePath, strReponse);
+
+                    fileSaved = true;
+                }else if (response.StatusCode == HttpStatusCode.PreconditionFailed)
+                {
+                    // File not found
+                    fileSaved = false;
+                }
+
+            }
+            catch (WebException ex)
+            {
+                if (ex.Response != null)
+                {
+                    throw ExceptionHandler.HandleResponseException((HttpWebResponse)ex.Response);
+                }
+                else
+                {
+                    throw;
+                }
+            }
+            finally
+            {
+                if (response != null)
+                {
+                    response.Close();
+                }
+
+                if(reader != null)
+                {
+                    reader.Close();
+                }
+            }
+
+            return fileSaved;
         }
 
         #endregion

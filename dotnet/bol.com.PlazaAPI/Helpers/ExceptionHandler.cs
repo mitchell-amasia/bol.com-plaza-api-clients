@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Xml.Serialization;
 
@@ -21,8 +22,11 @@ namespace bol.com.PlazaAPI.Helpers
             try
             {
                 XmlRootAttribute xmlRoot = new XmlRootAttribute();
-                xmlRoot.ElementName = "serviceError";
-                xmlRoot.Namespace = "http://config.services.com/schemas/bol-messages-1.0.xsd";
+                xmlRoot.ElementName = "ServiceError";
+                xmlRoot.Namespace = 
+                    response.ResponseUri.AbsoluteUri.Contains("offers/v1") ? 
+                    "http://plazaapi.bol.com/offers/xsd/api-1.0.xsd" : "http://config.services.com/schemas/bol-messages-1.0.xsd";
+
                 xmlRoot.IsNullable = true;
 
                 XmlSerializer ser = new XmlSerializer(typeof(ServiceError), xmlRoot);
